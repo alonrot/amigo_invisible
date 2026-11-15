@@ -131,7 +131,8 @@
   #theirs b{display:block; margin-bottom:5px; font-size:15.5px; font-weight:600; color:var(--dim);}
   #theirs a{color:var(--hot);}
   #admin{margin-top:30px;}
-  #admin > .btn{margin-top:0;}
+  #admin > .btn{margin:0 auto; width:auto; padding:9px 16px; border-radius:11px;
+    font-size:14.5px; font-weight:500; color:var(--faint); box-shadow:inset 0 0 0 1px var(--line);}
   #admin .card{margin:0; box-shadow:inset 0 0 0 1.5px var(--line);}
   #admStatus{color:var(--ink); font-size:17px;}
   footer{text-align:center; padding:0 16px 18px; font-size:14.5px; color:var(--faint);}
@@ -172,7 +173,6 @@
       </section>
 
       <section class="card">
-        <p class="small" id="roster"></p>
         <button class="btn ghost" id="salir" type="button">Salir</button>
       </section>
     </div>
@@ -202,7 +202,7 @@
           <label for="amPin">Inventa una clave de 4 números</label>
           <input id="amPin" class="pin" type="tel" inputmode="numeric" pattern="[0-9]*"
                  maxlength="4" autocomplete="off">
-          <p class="small" style="margin-top:6px">Apúntala: la necesitarás para ver a quién te tocó.</p>
+          <p class="small" style="margin-top:6px">Apúntala: la necesitarás para ver a quién te ha tocado.</p>
           <label for="amWish">Tu lista de deseos <span class="opt">(opcional)</span></label>
           <textarea id="amWish" maxlength="1000" placeholder="Ideas de regalo, tallas, colores…"></textarea>
           <div id="nmatch" hidden></div>
@@ -221,7 +221,7 @@
       <section class="card" id="admBox" hidden>
         <h2>Administración</h2>
         <div id="admLogin">
-          <label for="admPin">Clave de administración</label>
+          <label for="admPin">Clave</label>
           <input id="admPin" class="pin masked" type="tel" inputmode="numeric" pattern="[0-9]*"
                  maxlength="4" autocomplete="off">
           <button class="btn" id="admGo" type="button">Entrar</button>
@@ -398,7 +398,7 @@ function render(){
     ? "⚠️ El sorteo se ha rehecho. Por favor, que todo el mundo vuelva a entrar para ver si le ha cambiado su amiga invisible."
     : state.drawn
     ? (sess ? "🎉 ¡El sorteo ya está hecho!"
-            : "🎉 ¡El sorteo ya está hecho! Toca tu nombre y escribe tu clave para ver a quién te tocó.")
+            : "🎉 ¡El sorteo ya está hecho! Toca tu nombre y escribe tu clave para ver a quién te ha tocado.")
     : (n === 0 ? "Todavía no hay nadie en la lista. ¡Sé la primera persona!"
        : n === 1 ? "Hay 1 persona en la lista. El sorteo todavía no se ha hecho."
        : "Ya somos " + n + " en la lista. El sorteo todavía no se ha hecho.");
@@ -443,7 +443,7 @@ function renderMine(){
   $("waiting").hidden = !!match;
   $("waitNote").textContent = state.drawn
     ? "Te has añadido después del sorteo. Hay que rehacerlo para que te toque alguien." + askOrg(" Avisa a ")
-    : "Cuando se haga el sorteo, vuelve a esta página y aquí verás a quién te tocó regalarle.";
+    : "Cuando se haga el sorteo, vuelve a esta página y aquí verás a quién te ha tocado regalarle.";
   $("matched").hidden = !match;
   if (match){
     const g = $("gift");
@@ -453,11 +453,11 @@ function renderMine(){
     giftStamp = gs;
     g.className = revealed ? "open" : "";
     g.innerHTML = revealed
-      ? '<span class="lbl">Te tocó regalarle a</span><span class="who">' + esc(match.name)
+      ? '<span class="lbl">Te ha tocado regalarle a</span><span class="who">' + esc(match.name)
         + '</span><span class="hide">Toca para ocultar</span>'
       : (match.changed ? '<span class="w">⚠️ Ha cambiado. El sorteo se ha rehecho.</span>' : "")
         + '<span class="q">???</span><span class="t">'
-        + (match.changed ? "Toca para ver tu nueva amiga invisible" : "Toca para ver a quién te tocó") + "</span>";
+        + (match.changed ? "Toca para ver tu nueva amiga invisible" : "Toca para ver a quién te ha tocado") + "</span>";
     }
     const t = $("theirs");
     t.hidden = !revealed;
@@ -467,7 +467,6 @@ function renderMine(){
   }
   const wl = $("wl");
   if (!wlDirty && document.activeElement !== wl) wl.value = me.wishlist || "";
-  $("roster").textContent = "En la lista (" + state.people.length + "): " + state.people.join(", ");
 }
 
 /* ---------- sign in with a chip + PIN ---------- */
