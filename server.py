@@ -5,18 +5,19 @@ Serves this folder AND answers the same API, so index.html needs no changes:
 
     GET  /data.json   -> {"event": {...}, "people": [names], "drawn": bool, "recheck": n}
     POST /submit      -> {"action": "join" | "me" | "wishlist" | "seen", "name", "pin", ...}
+                         {"action": "admin", "admin": pin, "do": check|draw|redraw|undraw|wipe}
 
 State lives in local_data.json next to this script (gitignored): the local
 equivalent of the Sheet's event / people / draw tabs. Edit it by hand to set
 exclusions, exactly as you would in the Sheet.
 
-The draw is deliberately NOT an HTTP endpoint, same as production:
+The local admin PIN is 0000 ("admin" in local_data.json). The real one lives only
+in the Sheet's event tab: this file is in a public repo. The draw also runs from here:
 
     python3 server.py 8000            run the server
     python3 server.py draw            do the draw (refuses if one exists)
     python3 server.py draw --force    throw the draw away and redo it
     python3 server.py check           validate exclusions without drawing
-    python3 server.py late            splice in people added by hand after the draw
     python3 server.py reset           delete local_data.json
 
 Phone on the same wifi:  http://$(ipconfig getifaddr en0):8000/
@@ -34,6 +35,7 @@ LOCK = threading.Lock()
 EMPTY = {
     "event": {"nombre": "Amiga Invisible", "presupuesto": "20 €", "fecha": "24 de diciembre",
               "organizador": "Alon", "nota": ""},
+    "admin": "0000",  # local only; the real PIN is in the Sheet
     "people": [],     # {name, pin, wishlist, exclusions, joinedAt}
     "draw": [],       # {giver, receiver, seenAt, changedAt}
 }
@@ -71,10 +73,12 @@ def find(people, name):
 
 
 def state(d):
-    """Public. From the draw it exposes two numbers and never a name."""
+    """Public. From the draw it exposes counts and never a name."""
+    drawn = bool(d["draw"])
     return {"event": d["event"], "people": [p["name"] for p in d["people"]],
-            "drawn": bool(d["draw"]),
-            "recheck": sum(1 for r in d["draw"] if r.get("changedAt") and not r.get("seenAt"))}
+            "drawn": drawn,
+            "recheck": sum(1 for r in d["draw"] if r.get("changedAt") and not r.get("seenAt")),
+            "pending": sum(1 for p in d["people"] if not giver_row(d, p["name"])) if drawn else 0}
 
 
 def giver_row(d, name):
@@ -113,11 +117,29 @@ def handle(p):
             return {"error": "exists"}
         me = {"name": name, "pin": pin, "wishlist": str(p.get("wishlist") or "").strip()[:1000],
               "exclusions": "", "joinedAt": now_iso()}
-        d["people"].append(me)
-        if d["draw"] and not splice(d, me):      # after the draw: A -> B becomes A -> me -> B
-            return {"error": "no_slot"}
+        d["people"].append(me)     # after the draw: no assignment until the admin re-draws
         write(d)
         return mine(d, me)
+    if action == "admin":
+        if not d.get("admin"):
+            return {"error": "no_admin"}
+        if str(p.get("admin") or "").strip() != str(d["admin"]):
+            return {"error": "bad_admin"}
+        what, msg = str(p.get("do") or "check"), ""
+        if what in ("draw", "redraw"):
+            msg, err = do_draw(d, force=(what == "redraw"))
+            if err:
+                return {"error": "draw", "detail": err}
+        elif what == "undraw":
+            d["draw"], msg = [], "Sorteo anulado."
+        elif what == "wipe":
+            d["draw"], d["people"], msg = [], [], "Todo borrado: ni personas ni sorteo."
+        elif what != "check":
+            return {"error": "bad_action"}
+        write(d)
+        out = state(d)          # public state only: never anybody's assignment
+        out.update(ok=True, msg=msg)
+        return out
     if action not in ("me", "wishlist", "seen"):
         return {"error": "bad_action"}
     me = find(d["people"], p.get("name"))
@@ -162,28 +184,6 @@ def banned_sets(people, strict):
     return banned, idx, None
 
 
-def splice(d, newcomer):
-    """Mirror of pickSlot_ + splice_. Mutates d; the caller writes. False = no valid pair."""
-    banned, idx, _ = banned_sets(d["people"], False)
-    me = idx[nkey(newcomer["name"])]
-    fresh, seen = [], []
-    for row in d["draw"]:
-        g, r = idx.get(nkey(row["giver"])), idx.get(nkey(row["receiver"]))
-        if g is None or r is None or me in (g, r) or me in banned[g] or r in banned[me]:
-            continue
-        (seen if row.get("seenAt") else fresh).append(row)
-    pool = fresh or seen                       # prefer a giver who hasn't looked yet
-    if not pool:
-        return False
-    row = random.choice(pool)
-    d["draw"].append({"giver": newcomer["name"], "receiver": row["receiver"],
-                      "seenAt": "", "changedAt": ""})
-    if row.get("seenAt"):
-        row["changedAt"], row["seenAt"] = now_iso(), ""
-    row["receiver"] = newcomer["name"]
-    return True
-
-
 def compute_draw(people):
     """Mirror of computeDraw_ in apps_script.gs. Returns (pairs, error)."""
     n = len(people)
@@ -205,35 +205,36 @@ def compute_draw(people):
                   "válido. Quita alguna exclusión." % MAX_TRIES)
 
 
-def cli_draw(force=False, dry=False):
-    d = read()
-    if d["draw"] and not force and not dry:
-        sys.exit("Ya hay un sorteo hecho (%d personas). No se ha cambiado nada. "
-                 "Para repetirlo: python3 server.py draw --force" % len(d["draw"]))
+def do_draw(d, force=False, dry=False):
+    """Mirror of doDraw_. Mutates d; the caller writes. Returns (msg, error)."""
+    old = d["draw"]
+    if old and not force and not dry:
+        return None, "Ya hay un sorteo hecho (%d personas). No se ha cambiado nada." % len(old)
     pairs, err = compute_draw(d["people"])
     if err:
-        sys.exit("ERROR: " + err)
+        return None, err
     if dry:
-        return print("Todo bien: %d personas, el sorteo es posible." % len(d["people"]))
-    d["draw"] = [{"giver": g, "receiver": r, "seenAt": "", "changedAt": ""} for g, r in pairs]
-    write(d)
-    print("Sorteo hecho: %d personas. (No se muestra: es secreto.)" % len(pairs))
+        return "Todo bien: %d personas, el sorteo es posible." % len(d["people"]), None
+    rows = []
+    for g, r in pairs:
+        was = giver_row(d, g)
+        looked = bool(was and (was.get("seenAt") or was.get("changedAt")))
+        same = bool(was and nkey(was["receiver"]) == nkey(r))
+        rows.append({"giver": g, "receiver": r,
+                     "seenAt": was.get("seenAt", "") if same else "",
+                     "changedAt": was.get("changedAt", "") if same else (now_iso() if looked else "")})
+    d["draw"] = rows
+    return "Sorteo hecho: %d personas." % len(rows), None
 
 
-def cli_late():
+def cli_draw(force=False, dry=False):
     d = read()
-    if not d["draw"]:
-        sys.exit("Todavía no hay sorteo. Usa: python3 server.py draw")
-    added = []
-    for p in d["people"]:
-        if giver_row(d, p["name"]):
-            continue
-        if not splice(d, p):
-            write(d)
-            sys.exit('No hay hueco para "%s" con sus exclusiones.' % p["name"])
-        added.append(p["name"])
-    write(d)
-    print("Dentro: %s." % ", ".join(added) if added else "No faltaba nadie.")
+    msg, err = do_draw(d, force, dry)
+    if err:
+        sys.exit("ERROR: " + err)
+    if not dry:
+        write(d)
+    print(msg)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -279,8 +280,6 @@ if __name__ == "__main__":
         cli_draw(force="--force" in sys.argv)
     elif cmd == "check":
         cli_draw(dry=True)
-    elif cmd == "late":
-        cli_late()
     elif cmd == "reset":
         if os.path.exists(DATA):
             os.remove(DATA)

@@ -130,6 +130,10 @@
     font-size:18px; white-space:pre-wrap; word-break:break-word;}
   #theirs b{display:block; margin-bottom:5px; font-size:15.5px; font-weight:600; color:var(--dim);}
   #theirs a{color:var(--hot);}
+  #admin{margin-top:30px;}
+  #admin > .btn{margin-top:0;}
+  #admin .card{margin:0; box-shadow:inset 0 0 0 1.5px var(--line);}
+  #admStatus{color:var(--ink); font-size:17px;}
   footer{text-align:center; padding:0 16px 18px; font-size:14.5px; color:var(--faint);}
 </style>
 </head>
@@ -151,7 +155,7 @@
         <h2 id="hola"></h2>
         <div id="waiting">
           <p>Ya estás en la lista. ✅</p>
-          <p class="small">Cuando se haga el sorteo, vuelve a esta página y aquí verás a quién te tocó regalarle.</p>
+          <p class="small" id="waitNote"></p>
         </div>
         <div id="matched" hidden>
           <button id="gift" type="button"></button>
@@ -192,7 +196,7 @@
         <button class="btn dashed" id="addbtn" type="button" style="margin-top:0">+ Añadirme</button>
         <div id="addform" hidden>
           <h2>Añadirme a la lista</h2>
-          <p class="small" id="lateNote" hidden>El sorteo ya está hecho, pero todavía puedes entrar: te tocará alguien igual.</p>
+          <p class="small" id="lateNote" hidden>El sorteo ya está hecho. Puedes añadirte, pero habrá que rehacerlo para que te toque alguien.</p>
           <label for="amName">Tu nombre</label>
           <input id="amName" type="text" maxlength="40" autocomplete="off" autocapitalize="words">
           <label for="amPin">Inventa una clave de 4 números</label>
@@ -208,6 +212,29 @@
             <button class="btn" id="amSave" type="button">Guardar</button>
           </div>
         </div>
+      </section>
+    </div>
+
+    <!-- ============ organiser ============ -->
+    <div id="admin" hidden>
+      <button class="btn ghost" id="admBtn" type="button">Realizar sorteo</button>
+      <section class="card" id="admBox" hidden>
+        <h2>Administración</h2>
+        <div id="admLogin">
+          <label for="admPin">Clave de administración</label>
+          <input id="admPin" class="pin masked" type="tel" inputmode="numeric" pattern="[0-9]*"
+                 maxlength="4" autocomplete="off">
+          <button class="btn" id="admGo" type="button">Entrar</button>
+        </div>
+        <div id="admPanel" hidden>
+          <p id="admStatus"></p>
+          <button class="btn" id="admDraw" type="button" data-do="draw">Realizar sorteo</button>
+          <button class="btn" id="admRedraw" type="button" data-do="redraw">Rehacer el sorteo</button>
+          <button class="btn ghost" id="admUndraw" type="button" data-do="undraw">Anular el sorteo</button>
+          <button class="btn ghost" id="admWipe" type="button" data-do="wipe">Borrar todo y empezar de cero</button>
+        </div>
+        <p class="msg" id="admMsg"></p>
+        <button class="btn ghost" id="admClose" type="button">Cerrar</button>
       </section>
     </div>
   </main>
@@ -283,7 +310,9 @@ const ERR = {
   bad_pin: () => "Esa no es la clave. Prueba otra vez.",
   no_user: () => "Ese nombre ya no está en la lista.",
   exists:  () => "Ese nombre ya está en la lista. Toca tu nombre arriba.",
-  no_slot: () => "No se pudo meterte en el sorteo." + askOrg(" Habla con "),
+  bad_admin: () => "Esa no es la clave de administración.",
+  no_admin: () => "Falta la clave de administración en la hoja (fila «admin» de la pestaña event).",
+  draw: d => d.detail || "No se pudo hacer el sorteo.",
   bad_name: () => "Escribe tu nombre.",
   bad_pin_format: () => "La clave tiene que ser de 4 números."
 };
@@ -291,9 +320,10 @@ const errText = d => (ERR[d.error] || (() => "No se pudo conectar. Prueba otra v
 const askOrg = pre => state && state.event.organizador ? pre + state.event.organizador + "." : "";
 
 function take(d){            // a successful authenticated answer
-  state = { event: d.event, people: d.people, drawn: d.drawn, recheck: d.recheck || 0 };
+  state = { event: d.event, people: d.people, drawn: d.drawn,
+            recheck: d.recheck || 0, pending: d.pending || 0 };
   if (d.me){
-    // a latecomer was spliced in and my name changed while the gift was open: close it
+    // the draw was redone and my name changed while the gift was open: close it
     if (match && d.match && match.name !== d.match.name) revealed = false;
     me = d.me; match = d.match || null;
   }
@@ -361,9 +391,11 @@ function render(){
   $("evNota").textContent = ev.nota || ""; $("evNota").hidden = !ev.nota;
   $("foot").textContent = offline ? "Sin conexión. Reintentando…" : "";
 
-  b.className = "banner" + (state.recheck ? " warn" : state.drawn ? " done" : "");
-  b.textContent = state.recheck
-    ? "⚠️ Entró alguien nuevo y a una persona le ha cambiado su amiga invisible. Por favor, que todo el mundo vuelva a entrar para comprobarlo."
+  b.className = "banner" + (state.pending || state.recheck ? " warn" : state.drawn ? " done" : "");
+  b.textContent = state.pending
+    ? "⚠️ Hay que rehacer el sorteo: " + (state.pending === 1 ? "se ha añadido 1 persona" : "se han añadido " + state.pending + " personas") + " después de hacerlo."
+    : state.recheck
+    ? "⚠️ El sorteo se ha rehecho. Por favor, que todo el mundo vuelva a entrar para ver si le ha cambiado su amiga invisible."
     : state.drawn
     ? (sess ? "🎉 ¡El sorteo ya está hecho!"
             : "🎉 ¡El sorteo ya está hecho! Toca tu nombre y escribe tu clave para ver a quién te tocó.")
@@ -374,6 +406,7 @@ function render(){
   $("mine").hidden = !sess || !me;
   $("lobby").hidden = !!(sess && me);
   if (sess && me) renderMine(); else renderLobby();
+  renderAdmin();
 }
 
 function renderLobby(){
@@ -408,6 +441,9 @@ function renderLobby(){
 function renderMine(){
   $("hola").textContent = "Hola, " + me.name;
   $("waiting").hidden = !!match;
+  $("waitNote").textContent = state.drawn
+    ? "Te has añadido después del sorteo. Hay que rehacerlo para que te toque alguien." + askOrg(" Avisa a ")
+    : "Cuando se haga el sorteo, vuelve a esta página y aquí verás a quién te tocó regalarle.";
   $("matched").hidden = !match;
   if (match){
     const g = $("gift");
@@ -419,7 +455,7 @@ function renderMine(){
     g.innerHTML = revealed
       ? '<span class="lbl">Te tocó regalarle a</span><span class="who">' + esc(match.name)
         + '</span><span class="hide">Toca para ocultar</span>'
-      : (match.changed ? '<span class="w">⚠️ Ha cambiado. Entró alguien nuevo.</span>' : "")
+      : (match.changed ? '<span class="w">⚠️ Ha cambiado. El sorteo se ha rehecho.</span>' : "")
         + '<span class="q">???</span><span class="t">'
         + (match.changed ? "Toca para ver tu nueva amiga invisible" : "Toca para ver a quién te tocó") + "</span>";
     }
@@ -466,7 +502,7 @@ $("amPin").addEventListener("input", () => digitsOnly($("amPin")));
    composedPath() is captured when the event is dispatched, so it still holds the
    original ancestors even if the chip was re-rendered (and detached) by its own
    click handler. e.target.closest() would walk an orphan and wrongly deselect. */
-const KEEP = "#whocard, #addwrap";
+const KEEP = "#whocard, #addwrap, #admin";
 document.addEventListener("click", e => {
   if (!picked || sess) return;
   const path = e.composedPath ? e.composedPath() : [e.target];
@@ -531,8 +567,8 @@ $("amSave").onclick = addMe;
 let seenSent = false;
 $("gift").onclick = () => {
   revealed = !revealed; renderMine();
-  // Tell the server I have looked. A latecomer is spliced in next to someone who
-  // hasn't, whenever possible, so that nobody is left holding a stale name.
+  // Tell the server I have looked. If the draw is redone later and my name
+  // changes, that is how it knows to warn me.
   if (revealed && sess && (!seenSent || match.changed)){
     seenSent = true;
     post({ action:"seen", name:sess.name, pin:sess.pin })
@@ -552,6 +588,74 @@ $("wlSave").onclick = async () => {
   finally{ $("wlSave").disabled = false; resched(); }
 };
 $("salir").onclick = () => { logout(); chipStamp = null; render(); window.scrollTo(0,0); poll(); };
+
+/* ---------- organiser panel ----------
+   The admin PIN is checked by the server and kept in memory only: it is not in this
+   file (public repo) and not in localStorage. Admin answers carry the public state
+   and nothing else - no admin action ever returns who gives to whom. */
+let adminOpen = false, adminPin = "", armed = "", armTimer = 0;
+const ADM_LABEL = { draw:"Realizar sorteo", redraw:"Rehacer el sorteo",
+                    undraw:"Anular el sorteo", wipe:"Borrar todo y empezar de cero" };
+
+function renderAdmin(){
+  $("admin").hidden = false;
+  $("admBtn").hidden = adminOpen;
+  $("admBox").hidden = !adminOpen;                 // the poll must not close it
+  $("admLogin").hidden = !!adminPin;
+  $("admPanel").hidden = !adminPin;
+  const n = state.people.length;
+  $("admStatus").textContent = (n === 1 ? "1 persona" : n + " personas") + " en la lista. "
+    + (state.drawn ? "El sorteo está hecho." : "El sorteo no está hecho.")
+    + (state.pending ? " Falta meter a " + state.pending + ": hay que rehacerlo." : "");
+  $("admDraw").hidden = state.drawn;
+  $("admRedraw").hidden = !state.drawn;
+  $("admUndraw").hidden = !state.drawn;
+  for (const k in ADM_LABEL){
+    const el = document.querySelector('#admPanel [data-do="' + k + '"]');
+    el.textContent = armed === k ? "¿Seguro? Toca otra vez" : ADM_LABEL[k];
+  }
+}
+
+async function adminDo(what, pin){
+  const msg = $("admMsg"); msg.className = "msg"; msg.textContent = "";
+  ++seq;
+  try{
+    const d = await post({ action:"admin", admin:pin, do:what });
+    if (d.error){
+      if (d.error === "bad_admin" || d.error === "no_admin"){ adminPin = ""; $("admPin").value = ""; }
+      msg.textContent = errText(d);
+    } else {
+      adminPin = pin;
+      state = { event:d.event, people:d.people, drawn:d.drawn,
+                recheck:d.recheck || 0, pending:d.pending || 0 };
+      if (d.msg){ msg.className = "msg ok"; msg.textContent = d.msg; }
+    }
+  }catch(err){ msg.textContent = errText({}); }
+  render();
+  poll();                                    // refresh my own gift if I am signed in
+}
+
+$("admBtn").onclick = () => { adminOpen = true; $("admMsg").textContent = ""; render();
+                              if (!adminPin) $("admPin").focus(); };
+$("admClose").onclick = () => { adminOpen = false; adminPin = ""; armed = "";
+                                $("admPin").value = ""; render(); };
+const admEnter = () => { const v = $("admPin").value.trim();
+                         if (/^\d{4}$/.test(v)) adminDo("check", v); };
+$("admGo").onclick = admEnter;
+$("admPin").addEventListener("input", () => { digitsOnly($("admPin")); if ($("admPin").value.length === 4) admEnter(); });
+document.querySelectorAll("#admPanel [data-do]").forEach(el => {
+  el.onclick = () => {
+    const what = el.dataset.do;
+    // everything except the first draw throws something away: ask twice
+    if (what !== "draw" && armed !== what){
+      armed = what; clearTimeout(armTimer);
+      armTimer = setTimeout(() => { armed = ""; if (state) renderAdmin(); }, 4000);
+      return renderAdmin();
+    }
+    armed = ""; clearTimeout(armTimer);
+    adminDo(what, adminPin);
+  };
+});
 
 poll();
 </script>

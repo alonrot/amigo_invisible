@@ -8,6 +8,9 @@
  *               fecha        free text or a real date cell (both are handled)
  *               organizador  who to ask about a forgotten PIN
  *               nota         optional line under the title
+ *               admin        the organiser's 4-digit PIN for the admin panel on
+ *                            the page. Lives ONLY here: this file and index.html
+ *                            are in a public repo. Blank = admin panel disabled.
  *   "people"  one row per participant. This tab IS the roster.
  *               name | pin | wishlist | exclusions | joinedAt
  *             - pin         4 digits, stored as TEXT so "0042" keeps its zeros.
@@ -18,23 +21,27 @@
  *   "draw"    giver | receiver | seenAt | changedAt. Written by the script only.
  *             Hidden tab. Hidden is not secret: the Sheet's owner can unhide it.
  *             - seenAt     set when the giver first opens their gift on the page
- *             - changedAt  set when a latecomer was spliced in AFTER this giver
- *                          had already looked, so their name is now different
+ *             - changedAt  set when a re-draw gave this giver a different name
+ *                          AFTER they had already looked
  *
  * SECRECY RULES — do not weaken these
  *   (a) No request ever returns more than ONE person's assignment. There is no
  *       "dump all" path. doGet() never returns a name from the draw tab.
- *   (b) The draw is NOT reachable over HTTP. runDraw() runs from this editor or
- *       from the Sheet's "Sorteo" menu. A draw endpoint would be a re-draw oracle.
+ *   (b) The draw can be run over HTTP only with the admin PIN (by Alon's choice;
+ *       it also still runs from the Sheet's "Sorteo" menu). Admin answers carry
+ *       the public state and nothing else: the admin PIN never returns a name
+ *       from the draw, so the organiser can redo it without learning anything
+ *       beyond their own assignment.
  *   (c) A person sees their assignment only with their name + PIN. There is no
  *       lockout (family app, by choice), so a 4-digit PIN stops curiosity, not a
  *       determined relative with a script: it is at most 10,000 guesses.
  *
- * LATECOMERS
- *   Someone who joins after the draw is spliced into the chain: one existing
- *   pair A -> B becomes A -> NEW -> B. Only A's assignment changes. A giver who
- *   has not looked yet is preferred; if A had already looked, A's page shows a
- *   warning and the public banner asks everyone to check again until A does.
+ * LATECOMERS AND RE-DRAWS
+ *   Someone who joins after the draw gets a row in "people" but no assignment.
+ *   The page then tells everybody "hay que rehacer el sorteo" until the admin
+ *   re-draws. On a re-draw, anyone who had already opened their gift and now has
+ *   a different name gets changedAt stamped: their gift says "Ha cambiado" and
+ *   the public banner asks everyone to check again until they have looked.
  *
  * DEPLOY
  *   Deploy ▸ New deployment ▸ Web app. Execute as: Me. Who has access: Anyone.
@@ -42,15 +49,17 @@
  *   ("New deployment" again would mint a NEW /exec URL and orphan the page.)
  *
  * API (same shape as server.py)
- *   GET                                   -> {event, people:[names], drawn, recheck}
+ *   GET                                   -> {event, people:[names], drawn, recheck, pending}
  *   POST {action:"join", name, pin, wishlist}     -> me-payload
  *   POST {action:"me", name, pin}                 -> me-payload
  *   POST {action:"wishlist", name, pin, wishlist} -> me-payload
  *   POST {action:"seen", name, pin}               -> me-payload (I opened my gift)
- *   me-payload = {ok, event, people, drawn, recheck, me:{name, wishlist},
+ *   POST {action:"admin", admin, do}              -> {ok, msg, ...public state}
+ *        do = "check" | "draw" | "redraw" | "undraw" | "wipe"
+ *   me-payload = {ok, event, people, drawn, recheck, pending, me:{name, wishlist},
  *                 match: null | {name, wishlist, changed}}
  *   Errors come back as HTTP 200 {error:"<code>"}: bad_name, bad_pin_format,
- *   exists, no_slot, no_user, bad_pin.
+ *   exists, no_user, bad_pin, bad_admin, no_admin, draw (+detail: why it can't be drawn).
  */
 
 const T_EVENT = "event", T_PEOPLE = "people", T_DRAW = "draw";
@@ -69,13 +78,14 @@ function setup() {
   if (!ss.getSheetByName(T_EVENT)) {
     const sh = ss.insertSheet(T_EVENT, 0);
     sh.getRange("A:B").setNumberFormat("@");
-    sh.getRange(1, 1, 6, 2).setValues([
+    sh.getRange(1, 1, 7, 2).setValues([
       ["clave", "valor"],
       ["nombre", "Amiga Invisible"],
       ["presupuesto", ""],
       ["fecha", ""],
       ["organizador", "Alon"],
-      ["nota", ""]]);
+      ["nota", ""],
+      ["admin", ""]]);
     sh.setFrozenRows(1);
     made.push(T_EVENT);
   }
@@ -103,9 +113,9 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu("Sorteo")
     .addItem("Hacer el sorteo", "runDraw")
     .addItem("Comprobar (sin sortear)", "checkDraw")
-    .addItem("Meter a quien falte", "addLatecomers")
     .addSeparator()
     .addItem("Repetir el sorteo (¡cambia todo!)", "forceRedraw")
+    .addItem("Anular el sorteo", "undoDraw")
     .addToUi();
 }
 
@@ -119,62 +129,65 @@ function checkDraw() { return draw_(false, true); }
 /** Throws away the existing draw and makes a new one. Everyone must look again. */
 function forceRedraw() { return draw_(true, false); }
 
-/**
- * For rows typed into "people" by hand after the draw (e.g. a latecomer who needs
- * exclusions set BEFORE being placed): splices in everyone not yet in the draw.
- */
-function addLatecomers() {
+/** Clears the draw: the page goes back to "todavía no se ha hecho". People stay. */
+function undoDraw() {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  try {
-    const people = readPeople_();
-    if (!readDraw_().length) return fail_("Todavía no hay sorteo. Usa runDraw().");
-    const added = [];
-    for (var i = 0; i < people.length; i++) {
-      const draw = readDraw_();
-      if (giverRow_(draw, people[i].name)) continue;
-      if (!splice_(people[i], people, draw))
-        return fail_("No hay hueco para \"" + people[i].name + "\" con sus exclusiones. " +
-                     (added.length ? "Sí se metió a: " + added.join(", ") + ". " : "") +
-                     "Quita alguna exclusión o repite el sorteo.");
-      added.push(people[i].name);
-    }
-    return say_(added.length ? "Dentro: " + added.join(", ") + "."
-                             : "No faltaba nadie: todo el mundo está en el sorteo.");
-  } finally {
-    lock.releaseLock();
-  }
+  try { clearDraw_(); return say_("Sorteo anulado. La lista de personas no se ha tocado."); }
+  finally { lock.releaseLock(); }
 }
 
+/** Editor / menu wrapper: takes the lock, throws on failure so it shows in red. */
 function draw_(force, dryRun) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const people = readPeople_();
-    const had = readDraw_().length;
-    if (had && !force && !dryRun)
-      return fail_("Ya hay un sorteo hecho (" + had + " personas). No se ha cambiado nada. " +
-                   "Para repetirlo a propósito: forceRedraw().");
-    const res = computeDraw_(people);
-    if (res.error) return fail_(res.error);
-    if (dryRun) return say_("Todo bien: " + people.length + " personas, el sorteo es posible.");
-
-    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(T_DRAW);
-    const last = sh.getLastRow();
-    if (last > 1) sh.getRange(2, 1, last - 1, 4).clearContent();
-    sh.getRange(2, 1, res.pairs.length, 2).setValues(res.pairs);
-    sh.hideSheet();
-    return say_("Sorteo hecho: " + res.pairs.length + " personas. " +
-                "Ya pueden entrar con su nombre y su clave.");
+    const res = doDraw_(force, dryRun);
+    return res.error ? fail_(res.error) : say_(res.msg);
   } finally {
     lock.releaseLock();
   }
 }
 
 /**
+ * The draw itself. Caller holds the lock. Returns {msg} or {error}: never a pair.
+ * On a re-draw, a giver who had already looked and now has someone else gets
+ * changedAt stamped, so the page can warn them.
+ */
+function doDraw_(force, dryRun) {
+  const people = readPeople_();
+  const old = readDraw_();
+  if (old.length && !force && !dryRun)
+    return { error: "Ya hay un sorteo hecho (" + old.length + " personas). No se ha cambiado nada." };
+  const res = computeDraw_(people);
+  if (res.error) return res;
+  if (dryRun) return { msg: "Todo bien: " + people.length + " personas, el sorteo es posible." };
+
+  const now = new Date().toISOString();
+  const rows = res.pairs.map(function (pair) {
+    const was = giverRow_(old, pair[0]);
+    const looked = was && (was.seenAt || was.changedAt);
+    const same = was && nkey_(was.receiver) === nkey_(pair[1]);
+    return [safe_(pair[0]), safe_(pair[1]),
+            same ? was.seenAt : "",
+            same ? was.changedAt : (looked ? now : "")];
+  });
+  clearDraw_();
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(T_DRAW);
+  sh.getRange(2, 1, rows.length, 4).setValues(rows);
+  sh.hideSheet();
+  return { msg: "Sorteo hecho: " + rows.length + " personas." };
+}
+
+function clearDraw_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(T_DRAW);
+  const last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 4).clearContent();
+}
+
+/**
  * banned[i][j] = true when i must not give to j. Symmetric on purpose.
- * strict: an exclusion naming nobody on the list is an error (typo guard for the
- * draw). Non-strict ignores it, so a latecomer's join can't be blocked by one.
+ * strict: an exclusion naming nobody on the list is an error (typo guard).
  */
 function banned_(people, strict) {
   const n = people.length, idx = {};
@@ -239,40 +252,6 @@ function computeDraw_(people) {
                   "no queda nadie fuera a quien regalar. Quita alguna exclusión." };
 }
 
-/**
- * Pure logic: which existing pair should a latecomer be spliced into?
- * draw = [{giver, receiver, seenAt}], returns an index into draw, or -1.
- * A -> B becomes A -> NEW -> B, so NEW must be allowed with both A and B.
- * Givers who have not opened their gift are preferred: nobody notices.
- */
-function pickSlot_(newcomer, people, draw) {
-  const b = banned_(people, false);
-  const me = b.idx[nkey_(newcomer.name)];
-  const fresh = [], seen = [];
-  for (var i = 0; i < draw.length; i++) {
-    const g = b.idx[nkey_(draw[i].giver)], r = b.idx[nkey_(draw[i].receiver)];
-    if (g == null || r == null || g === me || r === me) continue;
-    if (b.banned[g][me] || b.banned[me][r]) continue;
-    (draw[i].seenAt ? seen : fresh).push(i);
-  }
-  const pool = fresh.length ? fresh : seen;
-  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : -1;
-}
-
-/** Writes the splice. Returns false when exclusions leave no valid pair. */
-function splice_(newcomer, people, draw) {
-  const i = pickSlot_(newcomer, people, draw);
-  if (i < 0) return false;
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(T_DRAW);
-  const old = draw[i], now = new Date().toISOString();
-  // A had already looked -> clear seenAt and stamp changedAt so A gets warned
-  sh.getRange(old.row, 1, 1, 4).setValues([[
-    safe_(old.giver), safe_(newcomer.name), "", old.seenAt ? now : old.changedAt]]);
-  sh.getRange(Math.max(sh.getLastRow(), 1) + 1, 1, 1, 4).setValues([[
-    safe_(newcomer.name), safe_(old.receiver), "", ""]]);
-  return true;
-}
-
 /* ============================== web app ============================== */
 
 /** Public and unauthenticated: the roster of NAMES and the event. Nothing else. */
@@ -300,11 +279,38 @@ function doPost(e) {
       const me = { row: blankRow_(sh), name: name, pin: pin,
                    wishlist: wish_(p.wishlist), exclusions: "" };
       people.push(me);
-      // after the draw: splice first, and only then create the row
-      if (draw.length && !splice_(me, people, draw)) return json_({ error: "no_slot" });
+      // After the draw this person has no assignment: state_.pending makes the
+      // page say "hay que rehacer el sorteo" until the admin re-draws.
       sh.getRange(me.row, 1, 1, 5).setValues([[
         safe_(name), pin, safe_(me.wishlist), "", new Date().toISOString()]]);
-      return json_(mine_(me, people, readDraw_()));
+      return json_(mine_(me, people, draw));
+    }
+
+    if (action === "admin") {
+      const real = adminPin_();
+      if (!real) return json_({ error: "no_admin" });
+      if (String(p.admin || "").trim() !== real) return json_({ error: "bad_admin" });
+      const what = String(p.do || "check");
+      var msg = "";
+      if (what === "draw" || what === "redraw") {
+        const res = doDraw_(what === "redraw", false);
+        if (res.error) return json_({ error: "draw", detail: res.error });
+        msg = res.msg;
+      } else if (what === "undraw") {
+        clearDraw_();
+        msg = "Sorteo anulado.";
+      } else if (what === "wipe") {
+        clearDraw_();
+        const sh = ss.getSheetByName(T_PEOPLE), last = sh.getLastRow();
+        if (last > 1) sh.getRange(2, 1, last - 1, 5).clearContent();
+        msg = "Todo borrado: ni personas ni sorteo.";
+      } else if (what !== "check") {
+        return json_({ error: "bad_action" });
+      }
+      // public state only: the admin PIN never unlocks anybody's assignment
+      const out = state_(readPeople_(), readDraw_());
+      out.ok = true; out.msg = msg;
+      return json_(out);
     }
 
     if (action !== "me" && action !== "wishlist" && action !== "seen")
@@ -347,14 +353,17 @@ function mine_(me, people, draw) {
   return out;
 }
 
-/** Public state. From the draw it exposes two numbers and never a name. */
+/** Public state. From the draw it exposes counts and never a name. */
 function state_(people, draw) {
-  var recheck = 0;
+  var recheck = 0, pending = 0;
   for (var i = 0; i < draw.length; i++) if (draw[i].changedAt && !draw[i].seenAt) recheck++;
+  if (draw.length)
+    for (var j = 0; j < people.length; j++) if (!giverRow_(draw, people[j].name)) pending++;
   return { event: readEvent_(),
            people: people.map(function (p) { return p.name; }),
            drawn: draw.length > 0,
-           recheck: recheck };
+           recheck: recheck,      // looked, then a re-draw changed their name
+           pending: pending };    // joined after the draw: no assignment yet
 }
 
 /* ============================== sheet I/O ============================== */
@@ -369,6 +378,17 @@ function readEvent_() {
     if (k in out) out[k] = text_(rows[i][1]);
   }
   return out;
+}
+
+/** The admin PIN from the event tab. Read on its own so it can never ride along
+ *  in readEvent_(), which is sent to every visitor. */
+function adminPin_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(T_EVENT);
+  if (!sh) return "";
+  const rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++)
+    if (String(rows[i][0] || "").trim().toLowerCase() === "admin") return pin_(rows[i][1]);
+  return "";
 }
 
 /** A date typed into a cell arrives as a Date, not text. Render it in Spanish. */
