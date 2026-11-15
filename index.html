@@ -217,7 +217,7 @@
 /* Where are we running? localhost/LAN -> server.py.  Anything else (Netlify) -> Apps Script. */
 const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)$/
                 .test(location.hostname);
-const EXEC_URL = "";   // <- paste the Apps Script /exec URL here after deploying
+const EXEC_URL = "https://script.google.com/macros/s/AKfycbwPp40zxtCWh5a2vArqtdLvlGpSA1YktKb9uAKxW7S9dbmGoRsc5dweHMUamvYXnB1qQw/exec";   // <- paste the Apps Script /exec URL here after deploying
 
 const CONFIG = {
   apiBase: LOCAL ? "" : EXEC_URL,
