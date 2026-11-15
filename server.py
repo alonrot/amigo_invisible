@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dev server for Amigo Invisible — the local stand-in for apps_script.gs.
+Dev server for Amiga Invisible — the local stand-in for apps_script.gs.
 Serves this folder AND answers the same API, so index.html needs no changes:
 
     GET  /data.json   -> {"event": {...}, "people": [names], "drawn": bool, "recheck": n}
@@ -32,7 +32,7 @@ MAX_TRIES = 20000
 LOCK = threading.Lock()
 
 EMPTY = {
-    "event": {"nombre": "Amigo Invisible", "presupuesto": "20 €", "fecha": "24 de diciembre",
+    "event": {"nombre": "Amiga Invisible", "presupuesto": "20 €", "fecha": "24 de diciembre",
               "organizador": "Alon", "nota": ""},
     "people": [],     # {name, pin, wishlist, exclusions, joinedAt}
     "draw": [],       # {giver, receiver, seenAt, changedAt}

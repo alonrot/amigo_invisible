@@ -1,4 +1,4 @@
-# Amigo Invisible
+# Amiga Invisible
 
 Secret Santa for the family. Same stack as `rehearsal_salsabrosos`: one `index.html`
 on Netlify, a Google Apps Script web app bound to a Google Sheet, and `server.py` as

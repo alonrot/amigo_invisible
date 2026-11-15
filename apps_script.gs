@@ -1,5 +1,5 @@
 /**
- * Amigo Invisible — Google Apps Script backend (container-bound to the Sheet).
+ * Amiga Invisible — Google Apps Script backend (container-bound to the Sheet).
  *
  * SHEET LAYOUT (run setup() once to create it)
  *   "event"   key | value, one setting per row. Edit by hand:
@@ -71,7 +71,7 @@ function setup() {
     sh.getRange("A:B").setNumberFormat("@");
     sh.getRange(1, 1, 6, 2).setValues([
       ["clave", "valor"],
-      ["nombre", "Amigo Invisible"],
+      ["nombre", "Amiga Invisible"],
       ["presupuesto", ""],
       ["fecha", ""],
       ["organizador", "Alon"],
@@ -360,7 +360,7 @@ function state_(people, draw) {
 /* ============================== sheet I/O ============================== */
 
 function readEvent_() {
-  const out = { nombre: "Amigo Invisible", presupuesto: "", fecha: "", organizador: "", nota: "" };
+  const out = { nombre: "Amiga Invisible", presupuesto: "", fecha: "", organizador: "", nota: "" };
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(T_EVENT);
   if (!sh) return out;
   const rows = sh.getDataRange().getValues();

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#14111b">
-<title>Amigo Invisible</title>
+<title>Amiga Invisible</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
 <!-- Link previews (WhatsApp...). If you add an og:image it MUST be an absolute URL -
      WhatsApp silently ignores a relative one - and rename the file whenever you change it. -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Amigo Invisible">
+<meta property="og:title" content="Amiga Invisible">
 <meta property="og:description" content="Apúntate con tu nombre y una clave de 4 números">
 
 <style>
@@ -135,7 +135,7 @@
 <body>
 <div id="app">
   <header>
-    <h1 id="evName"><span>Amigo</span><span class="ghost">Invisible</span></h1>
+    <h1 id="evName"><span>Amiga</span><span class="ghost">Invisible</span></h1>
     <p class="meta" id="evMeta" hidden></p>
     <p class="nota" id="evNota" hidden></p>
   </header>
@@ -346,7 +346,7 @@ function render(){
     return;
   }
   const ev = state.event || {}, n = state.people.length;
-  const title = ev.nombre || "Amigo Invisible", words = title.split(/\s+/);
+  const title = ev.nombre || "Amiga Invisible", words = title.split(/\s+/);
   const last = words.length > 1 ? words.pop() : "";       // last word is drawn as an outline
   $("evName").innerHTML = "<span>" + esc(words.join(" ")) + "</span>"
                         + (last ? '<span class="ghost">' + esc(last) + "</span>" : "");
@@ -361,7 +361,7 @@ function render(){
 
   b.className = "banner" + (state.recheck ? " warn" : state.drawn ? " done" : "");
   b.textContent = state.recheck
-    ? "⚠️ Entró alguien nuevo y a una persona le ha cambiado su amigo invisible. Por favor, que todo el mundo vuelva a entrar para comprobarlo."
+    ? "⚠️ Entró alguien nuevo y a una persona le ha cambiado su amiga invisible. Por favor, que todo el mundo vuelva a entrar para comprobarlo."
     : state.drawn
     ? (sess ? "🎉 ¡El sorteo ya está hecho!"
             : "🎉 ¡El sorteo ya está hecho! Toca tu nombre y escribe tu clave para ver a quién te tocó.")
@@ -419,7 +419,7 @@ function renderMine(){
         + '</span><span class="hide">Toca para ocultar</span>'
       : (match.changed ? '<span class="w">⚠️ Ha cambiado. Entró alguien nuevo.</span>' : "")
         + '<span class="q">???</span><span class="t">'
-        + (match.changed ? "Toca para ver tu nuevo amigo invisible" : "Toca para ver a quién te tocó") + "</span>";
+        + (match.changed ? "Toca para ver tu nueva amiga invisible" : "Toca para ver a quién te tocó") + "</span>";
     }
     const t = $("theirs");
     t.hidden = !revealed;
