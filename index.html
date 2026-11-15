@@ -46,6 +46,7 @@
   /* the second word is there, you just can't quite see it */
   header h1 .ghost{color:transparent; -webkit-text-stroke:1.6px var(--hot);
     text-shadow:0 0 34px rgba(255,138,61,.35);}
+  header .sub{margin:12px 0 0; font-size:23px; font-weight:600; letter-spacing:-.01em; color:var(--gold);}
   header .meta{margin:20px 0 0; display:flex; gap:8px; flex-wrap:wrap;}
   header .meta span{background:rgba(255,255,255,.08); border-radius:999px;
     padding:6px 14px; font-size:16px; font-weight:600; color:var(--gold);}
@@ -136,6 +137,7 @@
 <div id="app">
   <header>
     <h1 id="evName"><span>Amiga</span><span class="ghost">Invisible</span></h1>
+    <p class="sub">Edición Valle</p>
     <p class="meta" id="evMeta" hidden></p>
     <p class="nota" id="evNota" hidden></p>
   </header>
