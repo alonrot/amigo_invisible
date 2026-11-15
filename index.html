@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#14111b">
+<title>Amigo Invisible</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%81%3C/text%3E%3C/svg%3E">
+
+<!-- Link previews (WhatsApp...). If you add an og:image it MUST be an absolute URL -
+     WhatsApp silently ignores a relative one - and rename the file whenever you change it. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Amigo Invisible">
+<meta property="og:description" content="Apúntate con tu nombre y una clave de 4 números">
+
+<style>
+  :root{
+    --bg:#14111b; --panel:#1e1a29; --panel2:#2a2438; --line:#40385a;
+    --ink:#f7f1ea; --dim:#bdb2ca; --faint:#8b809c;
+    --orange:#f25c16; --red:#d92c1e; --hot:#ff8a3d; --gold:#ffcf7a;
+    --fire:linear-gradient(135deg,var(--orange),var(--red));
+    --display:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  /* an author display: rule beats the [hidden] attribute, so say it explicitly */
+  [hidden]{display:none !important;}
+  html,body{margin:0; padding:0;}
+  html{background:var(--bg);}
+  body{color:var(--ink); font:18px/1.45 var(--display); -webkit-text-size-adjust:100%;
+    background:
+      radial-gradient(120% 420px at 50% -120px, rgba(242,92,22,.34), transparent 70%),
+      radial-gradient(70% 300px at 100% 0, rgba(217,44,30,.22), transparent 70%),
+      var(--bg);
+    background-repeat:no-repeat;}
+  #app{max-width:480px; margin:0 auto; min-height:100vh; min-height:100dvh;
+    display:flex; flex-direction:column;}
+
+  header{padding:calc(34px + env(safe-area-inset-top)) 22px 8px;}
+  header h1{margin:0; font-family:var(--display); font-weight:800; font-size:54px;
+    line-height:.92; letter-spacing:-.035em;}
+  header h1 span{display:block;}
+  /* the second word is there, you just can't quite see it */
+  header h1 .ghost{color:transparent; -webkit-text-stroke:1.6px var(--hot);
+    text-shadow:0 0 34px rgba(255,138,61,.35);}
+  header .meta{margin:20px 0 0; display:flex; gap:8px; flex-wrap:wrap;}
+  header .meta span{background:rgba(255,255,255,.08); border-radius:999px;
+    padding:6px 14px; font-size:16px; font-weight:600; color:var(--gold);}
+  header .nota{margin:12px 0 0; font-size:16.5px; color:var(--dim);}
+
+  main{flex:1; padding:18px 16px calc(28px + env(safe-area-inset-bottom));}
+  .banner{margin:0 6px 20px; font-size:17.5px; color:var(--dim);}
+  .banner.done{color:var(--gold); font-weight:600;}
+  .banner.warn,.banner.err{margin:0 0 18px; padding:14px 16px; border-radius:16px;
+    background:rgba(217,44,30,.16); border:1.5px solid rgba(255,138,61,.55);
+    color:#ffd9c2; font-weight:600;}
+
+  section.card{background:var(--panel); border-radius:24px; padding:20px 18px; margin:0 0 14px;}
+  h2{margin:0 0 14px; font-size:23px; font-weight:700; line-height:1.2; letter-spacing:-.01em;}
+  p{margin:0 0 10px;}
+  .small{font-size:15.5px; color:var(--dim);}
+
+  #chips{display:flex; flex-wrap:wrap; gap:10px;}
+  #chips button{padding:13px 20px; border-radius:999px; border:0;
+    background:var(--panel2); color:var(--ink); font-family:inherit; font-size:19px;
+    font-weight:600; line-height:1.2; box-shadow:inset 0 0 0 1.5px var(--line);}
+  #chips button.me{background:var(--fire); color:#fff; box-shadow:0 6px 22px rgba(242,92,22,.4);}
+  #chips .empty{color:var(--faint); font-size:16px;}
+
+  #pinbox{margin-top:20px; padding-top:18px; border-top:1.5px solid var(--panel2);}
+  label{display:block; margin:14px 0 6px; font-size:16.5px; font-weight:600; color:var(--dim);}
+  label .opt{font-weight:400; color:var(--faint);}
+  input,textarea{width:100%; padding:14px 15px; font-family:inherit; font-size:19px;
+    line-height:1.35; color:var(--ink); background:var(--bg); border:2px solid var(--line);
+    border-radius:15px; caret-color:var(--hot);}
+  input::placeholder,textarea::placeholder{color:var(--faint);}
+  input:focus,textarea:focus{outline:none; border-color:var(--hot);
+    box-shadow:0 0 0 4px rgba(255,138,61,.2);}
+  textarea{min-height:112px; resize:vertical;}
+  input.pin{font-size:34px; font-weight:800; letter-spacing:.45em; text-align:center;
+    padding-left:.45em; max-width:240px; font-variant-numeric:tabular-nums; color:var(--gold);}
+  input.pin.masked{-webkit-text-security:disc;}
+
+  button{cursor:pointer;}
+  button:focus-visible{outline:3px solid var(--gold); outline-offset:3px;}
+  .btn{display:block; width:100%; margin-top:16px; padding:17px 18px; border:0;
+    border-radius:16px; background:var(--fire); color:#fff; font-family:inherit;
+    font-size:20px; font-weight:800; line-height:1.2; letter-spacing:-.005em;
+    box-shadow:0 8px 26px rgba(217,44,30,.38);}
+  .btn:active{transform:translateY(1px); filter:brightness(.92);}
+  .btn:disabled{background:var(--panel2); color:var(--faint); box-shadow:none;}
+  .btn.ghost{background:transparent; color:var(--dim); box-shadow:inset 0 0 0 2px var(--line);
+    font-weight:600; font-size:18px;}
+  .btn.dashed{background:transparent; color:var(--hot); box-shadow:none;
+    border:2px dashed var(--hot); font-size:21px;}
+  .row2{display:flex; gap:10px;}
+  .msg{margin:12px 0 0; font-size:16.5px; font-weight:600; color:#ff9d8a; min-height:1.2em;}
+  .msg.ok{color:#8fe3a8;}
+  .msg:empty{display:none;}
+  #nmatch{margin-top:16px; padding:15px; border-radius:16px; background:var(--panel2);}
+  #nmatch p{font-size:17.5px; color:var(--ink);}
+  #nmatch .btn{margin-top:10px; padding:14px; font-size:18px;}
+
+  /* the reveal: the one loud moment on the page */
+  #gift{display:block; width:100%; margin:4px 0 0; padding:34px 16px 30px; border:0;
+    border-radius:22px; color:#fff; text-align:center; font-family:inherit;
+    background:var(--fire); box-shadow:0 14px 40px rgba(217,44,30,.45);}
+  #gift .q{display:block; font-size:76px; font-weight:800; line-height:.9; letter-spacing:.08em;
+    color:transparent; -webkit-text-stroke:2px rgba(255,255,255,.9);}
+  #gift .t{display:block; margin-top:16px; font-size:21px; font-weight:800;}
+  #gift .w{display:block; margin-bottom:14px; font-size:17px; font-weight:700;
+    background:rgba(0,0,0,.28); border-radius:12px; padding:9px 12px;}
+  #gift.open{background:var(--bg); box-shadow:inset 0 0 0 2px var(--hot), 0 0 60px rgba(242,92,22,.22);
+    padding:26px 16px 22px;}
+  #gift.open .lbl{display:block; font-size:17px; font-weight:600; color:var(--dim);}
+  #gift.open .who{display:block; margin:8px 0 6px; font-size:50px; font-weight:800;
+    line-height:1; letter-spacing:-.03em; word-break:break-word;
+    background:linear-gradient(100deg,var(--gold),var(--hot) 55%,#ff5a3c);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:appear .7s cubic-bezier(.2,.7,.2,1) both;}
+  #gift.open .hide{display:block; margin-top:12px; font-size:15px; color:var(--faint);}
+  @keyframes appear{from{opacity:0; filter:blur(18px); transform:scale(.94);}
+                    to{opacity:1; filter:blur(0); transform:none;}}
+  @media (prefers-reduced-motion:reduce){ #gift.open .who{animation:none;} }
+  #theirs{margin-top:14px; padding:15px 16px; border-radius:16px; background:var(--panel2);
+    font-size:18px; white-space:pre-wrap; word-break:break-word;}
+  #theirs b{display:block; margin-bottom:5px; font-size:15.5px; font-weight:600; color:var(--dim);}
+  #theirs a{color:var(--hot);}
+  footer{text-align:center; padding:0 16px 18px; font-size:14.5px; color:var(--faint);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 id="evName"><span>Amigo</span><span class="ghost">Invisible</span></h1>
+    <p class="meta" id="evMeta" hidden></p>
+    <p class="nota" id="evNota" hidden></p>
+  </header>
+
+  <main>
+    <p class="banner" id="banner">Cargando…</p>
+
+    <!-- ============ signed in ============ -->
+    <div id="mine" hidden>
+      <section class="card">
+        <h2 id="hola"></h2>
+        <div id="waiting">
+          <p>Ya estás en la lista. ✅</p>
+          <p class="small">Cuando se haga el sorteo, vuelve a esta página y aquí verás a quién te tocó regalarle.</p>
+        </div>
+        <div id="matched" hidden>
+          <button id="gift" type="button"></button>
+          <div id="theirs" hidden></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Tu lista de deseos</h2>
+        <p class="small">Solo la verá la persona a la que le toque regalarte.</p>
+        <textarea id="wl" maxlength="1000" placeholder="Ideas de regalo, tallas, colores…"></textarea>
+        <button class="btn" id="wlSave" type="button">Guardar mi lista</button>
+        <p class="msg" id="wlMsg"></p>
+      </section>
+
+      <section class="card">
+        <p class="small" id="roster"></p>
+        <button class="btn ghost" id="salir" type="button">Salir</button>
+      </section>
+    </div>
+
+    <!-- ============ not signed in ============ -->
+    <div id="lobby" hidden>
+      <section class="card" id="whocard">
+        <h2 id="whoLbl">¿Quién eres? Toca tu nombre</h2>
+        <div id="chips"></div>
+        <div id="pinbox" hidden>
+          <label for="pin" id="pinLbl"></label>
+          <input id="pin" class="pin masked" type="tel" inputmode="numeric" pattern="[0-9]*"
+                 maxlength="4" autocomplete="off">
+          <button class="btn" id="pinGo" type="button">Entrar</button>
+          <p class="msg" id="pinMsg"></p>
+          <p class="small" id="forgot" style="margin-top:12px"></p>
+        </div>
+      </section>
+
+      <section class="card" id="addwrap">
+        <button class="btn dashed" id="addbtn" type="button" style="margin-top:0">+ Añadirme</button>
+        <div id="addform" hidden>
+          <h2>Añadirme a la lista</h2>
+          <p class="small" id="lateNote" hidden>El sorteo ya está hecho, pero todavía puedes entrar: te tocará alguien igual.</p>
+          <label for="amName">Tu nombre</label>
+          <input id="amName" type="text" maxlength="40" autocomplete="off" autocapitalize="words">
+          <label for="amPin">Inventa una clave de 4 números</label>
+          <input id="amPin" class="pin" type="tel" inputmode="numeric" pattern="[0-9]*"
+                 maxlength="4" autocomplete="off">
+          <p class="small" style="margin-top:6px">Apúntala: la necesitarás para ver a quién te tocó.</p>
+          <label for="amWish">Tu lista de deseos <span class="opt">(opcional)</span></label>
+          <textarea id="amWish" maxlength="1000" placeholder="Ideas de regalo, tallas, colores…"></textarea>
+          <div id="nmatch" hidden></div>
+          <p class="msg" id="amMsg"></p>
+          <div class="row2">
+            <button class="btn ghost" id="amCancel" type="button">Cancelar</button>
+            <button class="btn" id="amSave" type="button">Guardar</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+/* Where are we running? localhost/LAN -> server.py.  Anything else (Netlify) -> Apps Script. */
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)$/
+                .test(location.hostname);
+const EXEC_URL = "";   // <- paste the Apps Script /exec URL here after deploying
+
+const CONFIG = {
+  apiBase: LOCAL ? "" : EXEC_URL,
+  pollMs:  LOCAL ? 2000 : 8000,     // Apps Script has daily quotas; don't poll it hard
+  slowPollMs: LOCAL ? 2000 : 30000  // signed in after the draw: only wishlists can change
+};
+const GET_URL  = () => LOCAL ? "/data.json" : CONFIG.apiBase;
+const POST_URL = () => LOCAL ? "/submit"    : CONFIG.apiBase;
+/* ========================================== */
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"]/g,
+  c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+/* Sheet content is escaped before anything is injected, then bare URLs are linked. */
+const linkify = t => esc(t).replace(/(https?:\/\/[^\s<]+)/g,
+  '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+
+const nkey = x => String(x||"").normalize("NFKD").replace(/[̀-ͯ]/g,"")
+                  .toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+
+/* Only ever used to ASK - never to merge two people silently. */
+function looksLikeSameName(a, b){
+  if (a === b) return true;
+  if (a.startsWith(b + " ") || b.startsWith(a + " ")) return true;   // ana / ana maria
+  const fa = a.split(" ")[0], fb = b.split(" ")[0];
+  if (fa === fb) return true;                                        // jose / jose luis
+  if (fa.length >= 3 && (fb.startsWith(fa) || fa.startsWith(fb))) return true;  // mari / maricarmen
+  return false;
+}
+
+/* ---------- state ---------- */
+let state = null;            // {event, people:[names], drawn} - public
+let me = null, match = null; // only ever MY row and MY assignment; the server sends nothing else
+let sess = loadSess();       // {name, pin} remembered on this device
+let picked = "";             // chip tapped, PIN not entered yet
+let addOpen = false;         // panels remember themselves: the poll re-renders every few seconds
+let revealed = false, wlDirty = false, confirmedNew = false;
+let offline = false, seq = 0, timer = 0, chipStamp = null, giftStamp = null;
+
+function loadSess(){
+  try{ const s = JSON.parse(localStorage.getItem("amigo.sess") || "null");
+       return s && s.name && s.pin ? s : null; }catch(e){ return null; }
+}
+function saveSess(s){
+  sess = s;
+  try{ s ? localStorage.setItem("amigo.sess", JSON.stringify(s))
+         : localStorage.removeItem("amigo.sess"); }catch(e){}
+}
+
+/* ---------- server ---------- */
+async function post(body){
+  // text/plain keeps the request CORS-"simple": no preflight OPTIONS, which Apps
+  // Script cannot answer. Do NOT change this to application/json.
+  const res = await fetch(POST_URL(), { method:"POST",
+    headers:{ "Content-Type":"text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}
+
+const ERR = {
+  bad_pin: () => "Esa no es la clave. Prueba otra vez.",
+  no_user: () => "Ese nombre ya no está en la lista.",
+  exists:  () => "Ese nombre ya está en la lista. Toca tu nombre arriba.",
+  no_slot: () => "No se pudo meterte en el sorteo." + askOrg(" Habla con "),
+  bad_name: () => "Escribe tu nombre.",
+  bad_pin_format: () => "La clave tiene que ser de 4 números."
+};
+const errText = d => (ERR[d.error] || (() => "No se pudo conectar. Prueba otra vez."))(d);
+const askOrg = pre => state && state.event.organizador ? pre + state.event.organizador + "." : "";
+
+function take(d){            // a successful authenticated answer
+  state = { event: d.event, people: d.people, drawn: d.drawn, recheck: d.recheck || 0 };
+  if (d.me){
+    // a latecomer was spliced in and my name changed while the gift was open: close it
+    if (match && d.match && match.name !== d.match.name) revealed = false;
+    me = d.me; match = d.match || null;
+  }
+  offline = false;
+}
+
+async function poll(){
+  clearTimeout(timer);
+  const my = ++seq;
+  let note = "";
+  try{
+    if (!LOCAL && !EXEC_URL) throw new Error("config");
+    if (sess){
+      const d = await post({ action:"me", name:sess.name, pin:sess.pin });
+      if (my !== seq) return;
+      if (d.error === "bad_pin" || d.error === "no_user"){
+        // the PIN was changed in the Sheet, or the row was removed: back to the lobby
+        const who = sess.name; logout(); chipStamp = null;
+        picked = d.error === "no_user" ? "" : who;
+        note = "Escribe tu clave otra vez.";
+      } else if (d.error) throw new Error(d.error);
+      else take(d);
+    }
+    if (!sess){
+      const res = await fetch(GET_URL(), { cache:"no-store" });
+      if (!res.ok) throw new Error(res.status);
+      const d = await res.json();
+      if (my !== seq) return;
+      state = d; offline = false;
+    }
+  }catch(err){
+    if (my !== seq) return;
+    offline = true;
+  }
+  render();
+  if (note && picked) $("pinMsg").textContent = note;
+  resched();
+}
+/* Every write bumps seq to drop an in-flight poll, so it must restart the timer itself. */
+function resched(){
+  clearTimeout(timer);
+  timer = setTimeout(poll, sess && state && state.drawn ? CONFIG.slowPollMs : CONFIG.pollMs);
+}
+
+/* ---------- render ---------- */
+function render(){
+  const b = $("banner");
+  if (!state){
+    b.className = "banner" + (offline ? " err" : "");
+    b.textContent = !LOCAL && !EXEC_URL ? "Falta configurar la página (EXEC_URL)."
+                  : offline ? "No se pudo conectar. Reintentando…" : "Cargando…";
+    return;
+  }
+  const ev = state.event || {}, n = state.people.length;
+  const title = ev.nombre || "Amigo Invisible", words = title.split(/\s+/);
+  const last = words.length > 1 ? words.pop() : "";       // last word is drawn as an outline
+  $("evName").innerHTML = "<span>" + esc(words.join(" ")) + "</span>"
+                        + (last ? '<span class="ghost">' + esc(last) + "</span>" : "");
+  document.title = title;
+  const meta = [];
+  if (ev.fecha) meta.push("📅 " + ev.fecha);
+  if (ev.presupuesto) meta.push("🎁 " + ev.presupuesto);
+  $("evMeta").innerHTML = meta.map(m => "<span>" + esc(m) + "</span>").join("");
+  $("evMeta").hidden = !meta.length;
+  $("evNota").textContent = ev.nota || ""; $("evNota").hidden = !ev.nota;
+  $("foot").textContent = offline ? "Sin conexión. Reintentando…" : "";
+
+  b.className = "banner" + (state.recheck ? " warn" : state.drawn ? " done" : "");
+  b.textContent = state.recheck
+    ? "⚠️ Entró alguien nuevo y a una persona le ha cambiado su amigo invisible. Por favor, que todo el mundo vuelva a entrar para comprobarlo."
+    : state.drawn
+    ? (sess ? "🎉 ¡El sorteo ya está hecho!"
+            : "🎉 ¡El sorteo ya está hecho! Toca tu nombre y escribe tu clave para ver a quién te tocó.")
+    : (n === 0 ? "Todavía no hay nadie en la lista. ¡Sé la primera persona!"
+       : n === 1 ? "Hay 1 persona en la lista. El sorteo todavía no se ha hecho."
+       : "Ya somos " + n + " en la lista. El sorteo todavía no se ha hecho.");
+
+  $("mine").hidden = !sess || !me;
+  $("lobby").hidden = !!(sess && me);
+  if (sess && me) renderMine(); else renderLobby();
+}
+
+function renderLobby(){
+  const people = state.people;
+  if (picked && !people.some(x => nkey(x) === nkey(picked))) picked = "";
+  $("whocard").hidden = !people.length && !state.drawn;
+  $("whoLbl").textContent = picked ? "Hola, " + picked : "¿Quién eres? Toca tu nombre";
+
+  // Rebuild the chips only when they changed: a re-render detaches the node being tapped.
+  const stamp = people.join("\u0001") + "\u0002" + picked;
+  if (stamp !== chipStamp){
+    chipStamp = stamp;
+    const row = $("chips"); row.innerHTML = "";
+    people.forEach(name => {
+      const on = picked && nkey(name) === nkey(picked);
+      const c = document.createElement("button");
+      c.type = "button"; c.textContent = name; c.className = on ? "me" : "";
+      c.onclick = () => on ? deselect() : pick(name);
+      row.appendChild(c);
+    });
+    if (!people.length) row.innerHTML = '<span class="empty">Todavía no hay nadie.</span>';
+  }
+  $("pinbox").hidden = !picked;
+  $("pinLbl").textContent = "Escribe tu clave de 4 números";
+  $("forgot").textContent = "¿Olvidaste tu clave?" + (askOrg(" Pídesela a ") || " Pregunta a quien organiza.");
+
+  $("lateNote").hidden = !state.drawn;
+  $("addbtn").hidden = addOpen;
+  $("addform").hidden = !addOpen;       // the poll must not close the form mid-typing
+}
+
+function renderMine(){
+  $("hola").textContent = "Hola, " + me.name;
+  $("waiting").hidden = !!match;
+  $("matched").hidden = !match;
+  if (match){
+    const g = $("gift");
+    // rebuild only on a real change: every rebuild would replay the reveal animation
+    const gs = [revealed, match.name, match.changed].join("\u0001");
+    if (gs !== giftStamp){
+    giftStamp = gs;
+    g.className = revealed ? "open" : "";
+    g.innerHTML = revealed
+      ? '<span class="lbl">Te tocó regalarle a</span><span class="who">' + esc(match.name)
+        + '</span><span class="hide">Toca para ocultar</span>'
+      : (match.changed ? '<span class="w">⚠️ Ha cambiado. Entró alguien nuevo.</span>' : "")
+        + '<span class="q">???</span><span class="t">'
+        + (match.changed ? "Toca para ver tu nuevo amigo invisible" : "Toca para ver a quién te tocó") + "</span>";
+    }
+    const t = $("theirs");
+    t.hidden = !revealed;
+    t.innerHTML = match.wishlist
+      ? "<b>Su lista de deseos</b>" + linkify(match.wishlist)
+      : "<b>Su lista de deseos</b>Todavía no ha escrito nada. Vuelve a mirar más adelante.";
+  }
+  const wl = $("wl");
+  if (!wlDirty && document.activeElement !== wl) wl.value = me.wishlist || "";
+  $("roster").textContent = "En la lista (" + state.people.length + "): " + state.people.join(", ");
+}
+
+/* ---------- sign in with a chip + PIN ---------- */
+function pick(name){
+  picked = name; render();
+  $("pin").value = ""; $("pinMsg").textContent = "";
+  $("pin").focus();
+}
+function deselect(){ picked = ""; render(); }
+function logout(){ saveSess(null); me = null; match = null; revealed = false; wlDirty = false;
+                   seenSent = false; giftStamp = null; picked = ""; }
+
+async function signIn(){
+  const pin = $("pin").value.trim(), msg = $("pinMsg");
+  if (!/^\d{4}$/.test(pin)){ msg.textContent = ERR.bad_pin_format(); return; }
+  $("pinGo").disabled = true; msg.textContent = "";
+  ++seq;                                   // drop any poll that is still in flight
+  try{
+    const d = await post({ action:"me", name:picked, pin:pin });
+    if (d.error){ msg.textContent = errText(d); $("pin").value = ""; $("pin").focus(); }
+    else { saveSess({ name:d.me.name, pin:pin }); picked = ""; take(d); render(); window.scrollTo(0,0); }
+  }catch(err){ msg.textContent = errText({}); }
+  finally{ $("pinGo").disabled = false; resched(); }
+}
+$("pinGo").onclick = signIn;
+const digitsOnly = el => { el.value = el.value.replace(/\D/g,"").slice(0,4); };
+$("pin").addEventListener("input", () => { digitsOnly($("pin")); if ($("pin").value.length === 4) signIn(); });
+$("pin").addEventListener("keydown", e => { if (e.key === "Enter") signIn(); });
+$("amPin").addEventListener("input", () => digitsOnly($("amPin")));
+
+/* Tapping anywhere that isn't the name row or a form clears the picked chip.
+   composedPath() is captured when the event is dispatched, so it still holds the
+   original ancestors even if the chip was re-rendered (and detached) by its own
+   click handler. e.target.closest() would walk an orphan and wrongly deselect. */
+const KEEP = "#whocard, #addwrap";
+document.addEventListener("click", e => {
+  if (!picked || sess) return;
+  const path = e.composedPath ? e.composedPath() : [e.target];
+  for (const n of path) if (n instanceof Element && n.matches(KEEP)) return;
+  deselect();
+});
+
+/* ---------- add myself ---------- */
+function closeAdd(){ addOpen = false; confirmedNew = false; $("nmatch").hidden = true;
+                     $("amMsg").textContent = ""; render(); }
+$("addbtn").onclick = () => {
+  addOpen = true; confirmedNew = false; picked = "";
+  $("amName").value = ""; $("amPin").value = ""; $("amWish").value = "";
+  $("amMsg").textContent = ""; $("nmatch").hidden = true;
+  render(); $("amName").focus();
+};
+$("amCancel").onclick = closeAdd;
+$("amName").addEventListener("input", () => { confirmedNew = false; $("nmatch").hidden = true; });
+
+function askNearMatch(typed, near){
+  const el = $("nmatch"); el.innerHTML = "";
+  const q = document.createElement("p");
+  q.textContent = near.length === 1
+    ? "Ya hay alguien en la lista que se llama «" + near[0] + "». ¿Eres tú?"
+    : "Ya están en la lista: " + near.join(", ") + ". ¿Eres una de esas personas?";
+  el.appendChild(q);
+  near.forEach(n => {
+    const y = document.createElement("button");
+    y.type = "button"; y.className = "btn"; y.textContent = "Sí, soy " + n;
+    y.onclick = () => { closeAdd(); pick(n); };          // already on the list: go sign in
+    el.appendChild(y);
+  });
+  const no = document.createElement("button");
+  no.type = "button"; no.className = "btn ghost"; no.textContent = "No, soy otra persona";
+  no.onclick = () => { confirmedNew = true; el.hidden = true; addMe(); };
+  el.appendChild(no);
+  el.hidden = false;
+}
+
+async function addMe(){
+  const name = $("amName").value.replace(/\s+/g," ").trim(), pin = $("amPin").value.trim();
+  const msg = $("amMsg"); msg.textContent = "";
+  if (nkey(name).length < 2){ msg.textContent = ERR.bad_name(); $("amName").focus(); return; }
+  if (!/^\d{4}$/.test(pin)){ msg.textContent = ERR.bad_pin_format(); $("amPin").focus(); return; }
+  const here = state.people;
+  if (here.some(x => nkey(x) === nkey(name))){ msg.textContent = ERR.exists(); return; }
+  const near = here.filter(x => looksLikeSameName(nkey(name), nkey(x)));
+  if (near.length && !confirmedNew) return askNearMatch(name, near);
+
+  $("amSave").disabled = true;
+  ++seq;
+  try{
+    const d = await post({ action:"join", name:name, pin:pin, wishlist:$("amWish").value });
+    if (d.error) msg.textContent = errText(d);
+    else { saveSess({ name:d.me.name, pin:pin }); take(d); closeAdd(); window.scrollTo(0,0); }
+  }catch(err){ msg.textContent = errText({}); }
+  finally{ $("amSave").disabled = false; resched(); }
+}
+$("amSave").onclick = addMe;
+
+/* ---------- signed in ---------- */
+let seenSent = false;
+$("gift").onclick = () => {
+  revealed = !revealed; renderMine();
+  // Tell the server I have looked. A latecomer is spliced in next to someone who
+  // hasn't, whenever possible, so that nobody is left holding a stale name.
+  if (revealed && sess && (!seenSent || match.changed)){
+    seenSent = true;
+    post({ action:"seen", name:sess.name, pin:sess.pin })
+      .then(d => { if (!d.error){ take(d); render(); } }).catch(() => { seenSent = false; });
+  }
+};
+$("wl").addEventListener("input", () => { wlDirty = true; $("wlMsg").textContent = ""; });
+$("wlSave").onclick = async () => {
+  const msg = $("wlMsg"), text = $("wl").value;
+  $("wlSave").disabled = true; msg.className = "msg"; msg.textContent = "";
+  ++seq;
+  try{
+    const d = await post({ action:"wishlist", name:sess.name, pin:sess.pin, wishlist:text });
+    if (d.error) msg.textContent = errText(d);
+    else { wlDirty = false; take(d); msg.className = "msg ok"; msg.textContent = "Guardado ✓"; }
+  }catch(err){ msg.textContent = errText({}); }
+  finally{ $("wlSave").disabled = false; resched(); }
+};
+$("salir").onclick = () => { logout(); chipStamp = null; render(); window.scrollTo(0,0); poll(); };
+
+poll();
+</script>
+</body>
+</html>

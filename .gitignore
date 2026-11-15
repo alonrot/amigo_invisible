@@ -1,0 +1,14 @@
+# local dev state: names, PINs and the draw. Never commit.
+local_data.json
+*.tmp
+*.tmp.*
+__pycache__/
+*.pyc
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# scratch backups
+.bak*
